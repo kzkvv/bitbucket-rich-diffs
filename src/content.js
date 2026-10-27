@@ -314,6 +314,12 @@
   }
 
   function extractPath(fileEl) {
+    const filepath = fileEl.querySelector('[data-qa="bk-filepath"]');
+    const headerPath = (filepath?.textContent || "").trim();
+    if (headerPath) return headerPath;
+    const article = fileEl.closest('article[data-qa="branch-diff-file"]');
+    const label = article?.getAttribute("aria-label") || "";
+    if (label.startsWith("Diff of file ")) return label.slice(13);
     if (fileEl.id && fileEl.id.startsWith("chg-")) {
       return decodePath(fileEl.id.slice(4));
     }
@@ -390,7 +396,7 @@
   }
 
   function findFileContainers() {
-    const cards = new Set();
+    const cards = new Set(document.querySelectorAll('article[data-qa="branch-diff-file"]'));
     const viewedNodes = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let node;
@@ -400,6 +406,8 @@
     }
 
     for (const v of viewedNodes) {
+      const article = v.parentElement.closest('article[data-qa="branch-diff-file"]');
+      if (article) continue;
       let cur = v.parentElement;
       while (cur && cur !== document.body) {
         if (elementContainsHunk(cur) || elementContainsBinaryNotice(cur)) {
@@ -529,6 +537,11 @@
   }
 
   function findAndMarkBody(fileEl) {
+    const content = fileEl.querySelector('[data-qa="bk-file__content"]');
+    if (content) {
+      content.classList.add("bmd-body");
+      return content;
+    }
     const tw = document.createTreeWalker(fileEl, NodeFilter.SHOW_TEXT);
     let viewedNode = null;
     let n;

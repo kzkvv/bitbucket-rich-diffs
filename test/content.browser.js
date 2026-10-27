@@ -1,4 +1,5 @@
 async (page) => {
+  page.setDefaultTimeout(5000);
   const results = [];
   const requests = [];
   let releaseSlow;
@@ -21,7 +22,7 @@ async (page) => {
     if (pathname === `${pr}/diff`) {
       return route.fulfill({
         contentType: "text/html",
-        body: `<main><article id="chg-docs/Alpha file.md"><header><span data-qa="bk-filepath">docs/Alpha file.md</span><label>Viewed<input type="checkbox"></label></header><section data-testid="native-diff"><div>Line numbers</div><pre>@@ -0,0 +1,3 @@\n+# Alpha preview</pre></section></article></main>`,
+        body: `<main><div id="chg-docs/Alpha file.md"></div><article data-qa="branch-diff-file" aria-label="Diff of file docs/Alpha file.md"><div><header><span data-qa="bk-filepath">docs/Alpha file.md</span><label>Viewed<input type="checkbox"></label></header><section data-qa="bk-file__content" data-testid="native-diff"><div>Comments are hidden.</div><div>Line numbers</div><pre>@@ -0,0 +1,3 @@\n+# Alpha preview</pre></section></div></article></main>`,
       });
     }
     if (/\/pullrequests\/(7|8)$/.test(pathname)) {
@@ -81,7 +82,7 @@ async (page) => {
   check("switching files removes the previous preview", await card.getByRole("heading", { name: "Alpha preview" }).count() === 0);
   check("one toolbar remains after file switching", await card.locator(".bmd-toolbar").count() === 1);
   await card.locator("[data-testid='native-diff']").evaluate((el) => {
-    el.outerHTML = '<section data-testid="native-diff"><div>Line numbers</div><pre>@@ -0,0 +1,3 @@\n+# Beta preview</pre></section>';
+    el.outerHTML = '<section data-qa="bk-file__content" data-testid="native-diff"><div>Line numbers</div><pre>@@ -0,0 +1,3 @@\n+# Beta preview</pre></section>';
   });
   await card.getByRole("heading", { name: "Beta preview" }).waitFor();
   check("replacing the native diff restores the selected preview", await card.locator(".bmd-btn.bmd-active").innerText() === "Rendered (side-by-side)");
