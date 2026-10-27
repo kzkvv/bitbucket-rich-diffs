@@ -15,6 +15,7 @@
     ws: null,
     repo: null,
     prId: null,
+    prKey: null,
     commitsPromise: null,
     rawCache: new Map(),
   };
@@ -35,6 +36,12 @@
   function parseLocation() {
     const m = location.pathname.match(/^\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)/);
     if (!m) return false;
+    const prKey = m.slice(1).join("/");
+    if (state.prKey !== prKey) {
+      state.commitsPromise = null;
+      state.rawCache.clear();
+      state.prKey = prKey;
+    }
     state.ws = m[1];
     state.repo = m[2];
     state.prId = m[3];
@@ -265,7 +272,8 @@
     if (!hash) return { text: "", bytes: null, missing: true };
     const key = `${hash}::${path}`;
     if (state.rawCache.has(key)) return state.rawCache.get(key);
-    const url = `/${state.ws}/${state.repo}/raw/${hash}/${encodeURI(path)}`;
+    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+    const url = `/${state.ws}/${state.repo}/raw/${encodeURIComponent(hash)}/${encodedPath}`;
     const r = await fetch(url, { credentials: "include" });
     if (r.status === 404) {
       const result = { text: "", bytes: null, missing: true };
@@ -350,6 +358,7 @@
       "button, span, a, h1, h2, h3, h4, h5, h6, [data-qa='bk-filepath'], [data-testid='filename']"
     );
     for (const c of candidates) {
+      if (c.closest(".bmd-toolbar, .bmd-view")) continue;
       const t = (c.textContent || "").trim();
       if (!FILENAME_RE.test(t)) continue;
       if (isFilenameInBodyContext(c)) continue;
@@ -433,7 +442,7 @@
       buttons[m] = b;
     }
 
-    fileEl._bmd = { bar, buttons, status, path, mode: "original", view: null };
+    fileEl._bmd = { bar, buttons, status, path, prKey: state.prKey, mode: "original", view: null, body: null, renderId: 0, failed: false };
     return bar;
   }
 
@@ -451,7 +460,10 @@
 
   async function setMode(fileEl, path, mode) {
     const ctx = fileEl._bmd;
-    if (ctx.mode === mode) return;
+    if (ctx.mode === mode && !ctx.failed) return;
+    ctx.failed = false;
+    const renderId = ++ctx.renderId;
+    const isCurrent = () => fileEl.isConnected && fileEl._bmd === ctx && ctx.renderId === renderId && ctx.prKey === state.prKey && extractPath(fileEl) === path;
     setActiveButton(fileEl, mode);
     ctx.mode = mode;
     fileEl.classList.toggle("bmd-mode-rendered", mode !== "original");
@@ -464,7 +476,7 @@
     if (!ctx.view) {
       ctx.view = document.createElement("div");
       ctx.view.className = "bmd-view";
-      const bodyEl = fileEl.querySelector(".bmd-body");
+      const bodyEl = ctx.body;
       (bodyEl || fileEl).appendChild(ctx.view);
     }
 
@@ -477,10 +489,17 @@
     setStatus(fileEl, "Loading…");
     try {
       const { src, dst } = await getCommits();
+      if (!isCurrent()) return;
       const [oldRes, newRes] = await Promise.all([
         fetchRaw(dst, path),
         fetchRaw(src, path),
       ]);
+      if (!isCurrent()) return;
+      if (oldRes.missing && newRes.missing) {
+        state.rawCache.delete(`${dst}::${path}`);
+        state.rawCache.delete(`${src}::${path}`);
+        throw new Error(`Bitbucket returned 404 for both revisions of ${path}. Check the file path, PR revisions, and repository access.`);
+      }
       ctx.view.innerHTML = "";
       let rendered;
       if (isOdsPath(path)) {
@@ -494,9 +513,12 @@
             ? BMD.makeSideBySide(oldRes, newRes)
             : BMD.makeUnifiedRendered(oldRes, newRes);
       }
+      if (!isCurrent()) return;
       ctx.view.appendChild(rendered);
       setStatus(fileEl, "");
     } catch (err) {
+      if (!isCurrent()) return;
+      ctx.failed = true;
       ctx.view.innerHTML = "";
       const msg = document.createElement("div");
       msg.className = "bmd-error";
@@ -526,27 +548,59 @@
         for (const child of el.children) visit(child);
         return;
       }
-      const txt = el.textContent || "";
-      if (HUNK_HEADER_RE.test(txt) || BINARY_NOTICE_RE.test(txt)) {
+      if (elementContainsHunk(el) || elementContainsBinaryNotice(el)) {
         bodyEl = el;
       }
     }
     visit(fileEl);
     if (bodyEl) bodyEl.classList.add("bmd-body");
+    return bodyEl;
+  }
+
+  function detach(fileEl) {
+    const ctx = fileEl._bmd;
+    if (!ctx) return;
+    ctx.renderId++;
+    ctx.bar.remove();
+    ctx.view?.remove();
+    ctx.body?.classList.remove("bmd-body");
+    fileEl.classList.remove("bmd-host", "bmd-mode-rendered");
+    delete fileEl.dataset.bmdAttached;
+    delete fileEl._bmd;
   }
 
   function attach(fileEl) {
-    if (fileEl.dataset.bmdAttached) return;
     const path = extractPath(fileEl);
+    const previous = fileEl._bmd;
+    if (previous && previous.path === path && previous.prKey === state.prKey) {
+      if (!fileEl.contains(previous.bar)) {
+        fileEl.insertBefore(previous.bar, fileEl.firstChild);
+      }
+      if (!previous.body || !fileEl.contains(previous.body)) {
+        previous.body = findAndMarkBody(fileEl);
+      }
+      if (previous.view && !fileEl.contains(previous.view)) {
+        previous.renderId++;
+        previous.view = null;
+        const mode = previous.mode;
+        previous.mode = "original";
+        setMode(fileEl, path, mode).catch(() => {});
+      }
+      return;
+    }
+    const mode = previous?.mode || "original";
+    detach(fileEl);
     if (!isSupportedPath(path)) return;
     fileEl.dataset.bmdAttached = "1";
     fileEl.classList.add("bmd-host");
     const bar = buildToolbar(fileEl, path);
     fileEl.insertBefore(bar, fileEl.firstChild);
-    findAndMarkBody(fileEl);
+    fileEl._bmd.body = findAndMarkBody(fileEl);
     setActiveButton(fileEl, "original");
     if (isOdsPath(path)) {
       setMode(fileEl, path, "unified").catch(() => {});
+    } else if (mode !== "original") {
+      setMode(fileEl, path, mode).catch(() => {});
     }
   }
 
@@ -562,7 +616,7 @@
       if (!parseLocation()) return;
       scan();
     });
-    obs.observe(document.body, { childList: true, subtree: true });
+    obs.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["id"] });
     let lastUrl = location.href;
     setInterval(() => {
       if (location.href !== lastUrl) {
