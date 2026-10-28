@@ -177,12 +177,16 @@
 /* Side-by-side */
 .bmd-sxs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
   background: var(--bmd-bg);
 }
-.bmd-sxs-col { border-right: 1px solid var(--bmd-border); min-width: 0; }
+.bmd-sxs-col { border-right: 1px solid var(--bmd-border); min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .bmd-sxs-col:last-child { border-right: 0; }
+.bmd-sxs-scroll { overflow: auto; max-height: 70vh; min-height: 0; flex: 1 1 auto; scrollbar-gutter: stable; overscroll-behavior: contain; }
+.bmd-aligned-block { display: flow-root; }
+.bmd-align-gap { visibility: hidden; }
+.bmd-align-gap td { padding: 0; border: 0; }
 .bmd-sxs-head {
   padding: 6px 20px;
   background: var(--bmd-bg-subtle);

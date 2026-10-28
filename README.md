@@ -35,7 +35,7 @@ ODS files default to **Rendered (unified)** on open, since Bitbucket's Original 
 
 ![Rendered unified view](screens/02-rendered-unified.png)
 
-**Rendered (side-by-side)** — two columns: Before on the left, After on the right, both fully rendered:
+**Rendered (side-by-side)** — Before and After panes with synchronized horizontal and vertical scrolling. Matching sections and table rows stay aligned, and relative images load from each revision:
 
 ![Rendered side-by-side view](screens/03-rendered-side-by-side.png)
 
@@ -101,7 +101,7 @@ Tagging `v*` triggers a GitHub Actions workflow that builds per-browser packages
 
 ## Known limitations
 
-- **Side-by-side Markdown** renders the two columns independently rather than line-aligned — aligning rendered HTML to source lines reliably is more trouble than it's worth.
+- **Side-by-side Markdown** aligns matching sections and table rows. Completely rewritten or reordered content may require positional alignment.
 - **Unified Markdown** renders each diff hunk separately, so a list item or fenced code block split across hunks may render slightly differently than the full document would.
 - **ODS row alignment** is naive: if a row is inserted at the top of a sheet, every cell below shifts and the diff highlights everything. Smarter row-fingerprint alignment is on the roadmap.
 - **ODS cells with mid-stream changes** (e.g., a small change in a long sentence inside a cell) currently show old → new as block-level, not character-level.

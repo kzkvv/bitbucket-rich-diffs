@@ -287,7 +287,7 @@
       result = { text: "", bytes: ab, missing: false };
     } else {
       const text = await r.text();
-      result = { text, bytes: null, missing: false };
+      result = { text, bytes: null, missing: false, url: new URL(url, location.origin).href };
     }
     state.rawCache.set(key, result);
     return result;
@@ -466,6 +466,11 @@
     s.dataset.kind = kind;
   }
 
+  function clearView(view) {
+    view.firstElementChild?.bmdDispose?.();
+    view.replaceChildren();
+  }
+
   async function setMode(fileEl, path, mode) {
     const ctx = fileEl._bmd;
     if (ctx.mode === mode && !ctx.failed) return;
@@ -488,7 +493,7 @@
       (bodyEl || fileEl).appendChild(ctx.view);
     }
 
-    ctx.view.innerHTML = "";
+    clearView(ctx.view);
     const loading = document.createElement("div");
     loading.className = "bmd-loading";
     loading.innerHTML = '<div class="bmd-spinner" aria-hidden="true"></div><div class="bmd-loading-label">Rendering…</div>';
@@ -508,7 +513,7 @@
         state.rawCache.delete(`${src}::${path}`);
         throw new Error(`Bitbucket returned 404 for both revisions of ${path}. Check the file path, PR revisions, and repository access.`);
       }
-      ctx.view.innerHTML = "";
+      clearView(ctx.view);
       let rendered;
       if (isOdsPath(path)) {
         rendered =
@@ -527,7 +532,7 @@
     } catch (err) {
       if (!isCurrent()) return;
       ctx.failed = true;
-      ctx.view.innerHTML = "";
+      clearView(ctx.view);
       const msg = document.createElement("div");
       msg.className = "bmd-error";
       msg.textContent = `Could not render: ${err && err.message ? err.message : err}`;
@@ -575,6 +580,7 @@
     if (!ctx) return;
     ctx.renderId++;
     ctx.bar.remove();
+    if (ctx.view) clearView(ctx.view);
     ctx.view?.remove();
     ctx.body?.classList.remove("bmd-body");
     fileEl.classList.remove("bmd-host", "bmd-mode-rendered");
@@ -594,6 +600,7 @@
       }
       if (previous.view && !fileEl.contains(previous.view)) {
         previous.renderId++;
+        clearView(previous.view);
         previous.view = null;
         const mode = previous.mode;
         previous.mode = "original";
