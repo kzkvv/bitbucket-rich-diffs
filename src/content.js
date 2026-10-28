@@ -314,12 +314,12 @@
   }
 
   function extractPath(fileEl) {
-    const filepath = fileEl.querySelector('[data-qa="bk-filepath"]');
-    const headerPath = (filepath?.textContent || "").trim();
-    if (headerPath) return headerPath;
     const article = fileEl.closest('article[data-qa="branch-diff-file"]');
     const label = article?.getAttribute("aria-label") || "";
     if (label.startsWith("Diff of file ")) return label.slice(13);
+    const filepath = fileEl.querySelector('[data-qa="bk-filepath"]');
+    const headerPath = (filepath?.textContent || "").trim();
+    if (headerPath) return headerPath;
     if (fileEl.id && fileEl.id.startsWith("chg-")) {
       return decodePath(fileEl.id.slice(4));
     }
@@ -629,7 +629,7 @@
       if (!parseLocation()) return;
       scan();
     });
-    obs.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["id"] });
+    obs.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["id", "aria-label"] });
     let lastUrl = location.href;
     setInterval(() => {
       if (location.href !== lastUrl) {

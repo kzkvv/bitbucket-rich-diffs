@@ -14,6 +14,8 @@ async (page) => {
     "docs/Beta file.md": "# Beta preview\n\nSecond document.\n",
     "docs/Slow file.md": "# Slow preview\n\nDelayed document.\n",
     "docs/Hash # and query?.md": "# Reserved path preview\n",
+    "docs/Deep section/reports/hidden-parent/child/index.md": "# Deep file preview\n",
+    "docs/Deep section/reports/another-parent/child/index.md": "# Other deep file preview\n",
   };
   const check = (name, passed) => results.push({ name, passed });
   await page.route("**/*", async (route) => {
@@ -71,6 +73,7 @@ async (page) => {
   check("unified hides the original diff", !await nativeDiff.isVisible());
   await card.evaluate((el) => {
     el.id = "chg-docs/Beta file.md";
+    el.setAttribute("aria-label", "Diff of file docs/Beta file.md");
     el.querySelector("[data-qa='bk-filepath']").textContent = "docs/Beta file.md";
     el.querySelector("pre").textContent = "@@ -0,0 +1,3 @@\n+# Beta preview";
   });
@@ -100,6 +103,7 @@ async (page) => {
   check("original mode works after file switching", await nativeDiff.isVisible());
   await card.evaluate((el) => {
     el.id = "chg-docs/Slow file.md";
+    el.setAttribute("aria-label", "Diff of file docs/Slow file.md");
     el.querySelector("[data-qa='bk-filepath']").textContent = "docs/Slow file.md";
     el.querySelector("pre").textContent = "@@ -0,0 +1,3 @@\n+# Slow preview";
   });
@@ -109,6 +113,7 @@ async (page) => {
   await slowRequest;
   await card.evaluate((el) => {
     el.id = "chg-docs/Alpha file.md";
+    el.setAttribute("aria-label", "Diff of file docs/Alpha file.md");
     el.querySelector("[data-qa='bk-filepath']").textContent = "docs/Alpha file.md";
     el.querySelector("pre").textContent = "@@ -0,0 +1,3 @@\n+# Alpha preview";
   });
@@ -121,13 +126,37 @@ async (page) => {
   check("rendered mode survives rapid file switching", await card.locator(".bmd-btn.bmd-active").innerText() === "Rendered (unified)");
   await card.evaluate((el) => {
     el.id = "chg-docs/Hash # and query?.md";
+    el.setAttribute("aria-label", "Diff of file docs/Hash # and query?.md");
     el.querySelector("[data-qa='bk-filepath']").textContent = "docs/Hash # and query?.md";
     el.querySelector("pre").textContent = "@@ -0,0 +1 @@\n+# Reserved path preview";
   });
   await card.getByRole("heading", { name: "Reserved path preview" }).waitFor();
   check("reserved filename characters remain in the requested path", requests.some((path) => path.endsWith("/source/docs/Hash%20%23%20and%20query%3F.md")));
   await card.evaluate((el) => {
+    el.id = "chg-docs/Deep section/reports/hidden-parent/child/index.md";
+    el.setAttribute("aria-label", "Diff of file docs/Deep section/reports/hidden-parent/child/index.md");
+    el.querySelector("[data-qa='bk-filepath']").textContent = "docs/Deep section/.../child/index.md";
+    el.querySelector("pre").textContent = "@@ -0,0 +1 @@\n+# Deep file preview";
+  });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await card.locator(".bmd-loading").waitFor({ state: "detached" });
+  check("collapsed breadcrumbs use the complete accessible path", await card.getByRole("heading", { name: "Deep file preview", exact: true }).count() === 1);
+  check("display ellipses never enter raw file requests", !requests.some((path) => path.includes("/.../")));
+  const requestCount = requests.filter((path) => path.includes("/raw/")).length;
+  await card.locator("[data-qa='bk-filepath']").evaluate((el) => { el.textContent = "docs/Deep section/reports/hidden-parent/child/index.md"; });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await card.locator(".bmd-loading").waitFor({ state: "detached" });
+  check("expanding a breadcrumb does not reload the same file", requests.filter((path) => path.includes("/raw/")).length === requestCount);
+  await card.locator("[data-qa='bk-filepath']").evaluate((el) => { el.textContent = "docs/Deep section/.../child/index.md"; });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await card.locator(".bmd-loading").waitFor({ state: "detached" });
+  check("collapsing a breadcrumb preserves the current preview", await card.getByRole("heading", { name: "Deep file preview", exact: true }).count() === 1);
+  await card.evaluate((el) => { el.setAttribute("aria-label", "Diff of file docs/Deep section/reports/another-parent/child/index.md"); });
+  await card.getByRole("heading", { name: "Other deep file preview", exact: true }).waitFor({ timeout: 2000 }).catch(() => {});
+  check("a canonical path change refreshes an identical collapsed breadcrumb", await card.getByRole("heading", { name: "Other deep file preview", exact: true }).count() === 1);
+  await card.evaluate((el) => {
     el.id = "chg-docs/Unavailable.md";
+    el.setAttribute("aria-label", "Diff of file docs/Unavailable.md");
     el.querySelector("[data-qa='bk-filepath']").textContent = "docs/Unavailable.md";
     el.querySelector("pre").textContent = "@@ -0,0 +1 @@\n+# Unavailable preview";
   });
@@ -139,6 +168,7 @@ async (page) => {
   check("a failed preview can be retried", await card.getByRole("heading", { name: "Recovered preview" }).count() === 1);
   await card.evaluate((el) => {
     el.id = "chg-docs/Deleted.md";
+    el.setAttribute("aria-label", "Diff of file docs/Deleted.md");
     el.querySelector("[data-qa='bk-filepath']").textContent = "docs/Deleted.md";
     el.querySelector("pre").textContent = "@@ -1,3 +0,0 @@\n-# Deleted preview";
   });
